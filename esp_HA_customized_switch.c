@@ -37,6 +37,8 @@
 #define CUSTOM_STRING_MAX_SIZE 127
 // #define LSL_CLUSTER_ID 0xFC01
 
+static int count = 0;
+static int *p_count = &count;
 static const char *TAG = "ESP_BUTTON_PRESS";
 
 static switch_func_pair_t button_func_pair[] = {
@@ -186,6 +188,7 @@ static esp_err_t zb_ota_upgrade_query_image_resp_handler(esp_zb_zcl_ota_upgrade_
     return ret;
 }
 
+
 /* remote device struct for recording and managing node info */
 light_bulb_device_params_t on_off_light;
 
@@ -204,6 +207,19 @@ static void zb_buttons_handler(switch_func_pair_t *button_func_pair)
         esp_zb_zcl_on_off_cmd_req(&cmd_req);
         esp_zb_lock_release();
         ESP_EARLY_LOGI(TAG, "Send 'on_off toggle' command to address(0x%x) endpoint(%d)", on_off_light.short_addr, on_off_light.endpoint);
+
+        (p_count)++;
+        // Tạo box_id dựa trên short_addr
+        uint16_t short_addr = esp_zb_get_short_address();
+        char short_addr_str[6];
+        snprintf(short_addr_str, sizeof(short_addr_str), "%04X", short_addr);
+        char box_id[128];
+        snprintf(box_id, sizeof(box_id), "{'action': 'factory_button', 'button': '%s'}", short_addr_str);
+
+        char b[16];
+        sprintf(b, "%d", *p_count);
+        lcd_sh1106_draw_text_and_qr(100, 20, b, 0, 0, box_id, 2);
+        
     } break;
     default:
         break;
@@ -380,7 +396,6 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
     }
 }
 
-
 static esp_err_t zb_attribute_reporting_handler(const esp_zb_zcl_report_attr_message_t *message)
 {
     ESP_RETURN_ON_FALSE(message, ESP_FAIL, TAG, "Empty message");
@@ -406,6 +421,7 @@ static esp_err_t zb_read_attr_resp_handler(const esp_zb_zcl_cmd_read_attr_resp_m
         ESP_LOGI(TAG, "Read attribute response: status(%d), cluster(0x%x), attribute(0x%x), type(0x%x), value(%d)", variable->status,
                  message->info.cluster, variable->attribute.id, variable->attribute.data.type,
                  variable->attribute.data.value ? *(uint8_t *)variable->attribute.data.value : 0);
+
         variable = variable->next;
     }
 
@@ -588,7 +604,7 @@ static void esp_zb_task(void *pvParameters)
     /* Custom cluster list */
     esp_zb_attribute_list_t *custom_cluster = esp_zb_zcl_attr_list_create(CUSTOM_CLUSTER_ID);
     uint16_t custom_attr1_id = 0x0000;
-    uint8_t custom_attr1_value[] = "\x0b""hello world";
+    uint8_t custom_attr1_value[] = "\x00";
     uint16_t custom_attr2_id = 0x0001;
     uint16_t custom_attr2_value = 0x1234;
     esp_zb_custom_cluster_add_custom_attr(custom_cluster, custom_attr1_id, ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
@@ -615,11 +631,32 @@ static void esp_zb_task(void *pvParameters)
     esp_zb_stack_main_loop();
 }
 
+
 void app_main(void)
 {
+    
+   
+    
     lcd_sh1106_init();
     lcd_sh1106_draw_screen(false);
+    
+    // const char *a = "test1";
+    // lcd_sh1106_draw_text(2,0, a);
+    // lcd_sh1106_draw_text_and_qr(100, 2, a, 0, 0, box_id, 2);
 
+    uint16_t short_addr = esp_zb_get_short_address();
+    char short_addr_str[6];
+    snprintf(short_addr_str, sizeof(short_addr_str), "%04X", short_addr);
+    char box_id[128];
+    snprintf(box_id, sizeof(box_id), "{'action': 'factory_button', 'button': '%s'}", short_addr_str);
+
+
+    char b[16];
+    sprintf(b, "%d", *p_count);
+    lcd_sh1106_draw_text_and_qr(100, 20, b, 0, 0, box_id, 2);
+    
+    
+    
     esp_zb_platform_config_t config = {
         .radio_config = ESP_ZB_DEFAULT_RADIO_CONFIG(),
         .host_config = ESP_ZB_DEFAULT_HOST_CONFIG(),
